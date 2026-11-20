@@ -20,7 +20,7 @@ what there is and say how far to trust it. Pure: no network, so it is tested on 
 import math
 import re
 
-FORMAT = 3   # geography only: clubs, courses, holes (number and line), greens; never a par or a hole index
+FORMAT = 4   # geography only: clubs, courses, holes (number and line), greens; never a par or a hole index
 ATTRIBUTION = ("© OpenStreetMap contributors. Available under the Open Database Licence 1.0 "
                "(https://opendatacommons.org/licenses/odbl/1-0/); see https://www.openstreetmap.org/copyright")
 # What the data is, so a copy of a file says where it comes from and under what licence (ODbL 4.2 and 4.6).
@@ -237,8 +237,45 @@ def combos(courses):
     return [{"name": combo_name(courses[a]["name"], courses[b]["name"], last), "courses": [a, b]}
             for a in loops for b in loops if a != b]
 
+def feature_geometry(element):
+    """Returns polygon geometry or a point."""
+    if element["type"] == "node":
+        return {
+            "point": list(point(element)),
+            "outer": [],
+            "inner": []
+        }
 
-def clean(outlines, holes, greens):
+    if element["type"] == "way":
+        geometry = element.get("geometry", [])
+        return {
+            "point": None,
+            "outer": [[list(point(p)) for p in geometry]] if len(geometry) > 2 else [],
+            "inner": []
+        }
+
+    outer = []
+    inner = []
+
+    for member in element.get("members", []):
+        if member.get("type") != "way":
+            continue
+        geometry = member.get("geometry", [])
+        if len(geometry) < 3:
+            continue
+
+        ring = [list(point(p)) for p in geometry]
+        role = member.get("role", "outer")
+
+        if role == "inner":
+            inner.append(ring)
+        else:
+            outer.append(ring)
+
+    return {"point": None, "outer": outer, "inner": inner}
+
+
+def clean(outlines, holes, greens, features):
     """Clubs from the raw elements: outlines (ways and relations), hole lines, and greens and tees (with centers).
     Returns the clubs and the counts the publishing checks compare."""
     clubs = []
@@ -274,6 +311,47 @@ def clean(outlines, holes, greens):
         club = owner((round(c["lat"], 6), round(c["lon"], 6)))
         if club:
             club["greens"].append([round(c["lat"], 6), round(c["lon"], 6)])
+    for feature in features:
+        tags = feature.get("tags", {})
+        golf_type = tags.get("golf")
+
+        if golf_type not in {
+            "green",
+            "tee",
+            "fairway",
+            "bunker",
+            "water_hazard",
+            "lateral_water_hazard",
+            "pin"
+        }:
+            continue
+
+        geometry = feature_geometry(feature)
+
+        if golf_type == "pin":
+            pt = point(feature)
+        else:
+            if not geometry["outer"]:
+                continue
+
+            centre = feature.get("center")
+
+            if centre:
+                pt = (round(centre["lat"], 6), round(centre["lon"], 6))
+            else:
+                pt = point(feature["geometry"][len(feature["geometry"]) // 2]) if feature.get("geometry") else None
+
+        if pt is None:
+            continue
+
+        club = owner(pt)
+
+        if club:
+            club.setdefault("features", []).append({
+                "osm": "%s/%d" % (feature["type"], feature["id"]),
+                "type": golf_type,
+                "geometry": geometry
+            })
 
     result = []
     for club in clubs:
@@ -281,9 +359,16 @@ def clean(outlines, holes, greens):
         name = (e.get("tags", {}).get("name") or "").strip() or "Golf course"
         courses = courses_of(club["lines"], name)
         box = club["box"]
-        entry = {"id": "%s/%d" % (e["type"], e["id"]), "name": name,
-                 "lat": round((box[0] + box[2]) / 2, 6), "lng": round((box[1] + box[3]) / 2, 6),
-                 "bbox": [round(v, 6) for v in box], "courses": courses}
+        entry = {
+            "id": "%s/%d" % (e["type"], e["id"]),
+            "name": name,
+            "lat": round((box[0] + box[2]) / 2, 6),
+            "lng": round((box[1] + box[3]) / 2, 6),
+            "bbox": [round(v, 6) for v in box],
+            "boundary": club["rings"],
+            "courses": courses,
+            "features": club.get("features", [])
+        }
         pairs = combos(courses)
         if pairs:
             entry["combos"] = pairs

@@ -23,9 +23,9 @@ def load(path):
 
 
 def osm_base(raw_dir):
-    """The oldest timestamp_osm_base of the four Overpass answers in raw_dir (when the data was current), or None."""
+    """The oldest timestamp_osm_base of the Overpass answers in raw_dir, or None."""
     stamps = []
-    for name in ("outlines", "relations", "holes", "greens"):
+    for name in ("outlines", "relations", "holes", "greens", "features"):
         try:
             with open(os.path.join(raw_dir, name + ".json")) as f:
                 stamp = (json.load(f).get("osm3s") or {}).get("timestamp_osm_base")
@@ -33,7 +33,7 @@ def osm_base(raw_dir):
             stamp = None
         if stamp:
             stamps.append(stamp)
-    return min(stamps) if len(stamps) == 4 else None
+    return min(stamps) if len(stamps) == 5 else None
 
 
 def build(raw_root, out, do_fetch, registry_root="registry", reports_root="reports"):
@@ -50,7 +50,10 @@ def build(raw_root, out, do_fetch, registry_root="registry", reports_root="repor
         if do_fetch:
             fetch(code, raw)
         outlines = load(os.path.join(raw, "outlines.json")) + load(os.path.join(raw, "relations.json"))
-        clubs, counts = clean(outlines, load(os.path.join(raw, "holes.json")), load(os.path.join(raw, "greens.json")))
+        holes = load(os.path.join(raw, "holes.json"))
+        greens = load(os.path.join(raw, "greens.json"))
+        features = load(os.path.join(raw, "features.json"))
+        clubs, counts = clean(outlines, holes, greens, features)
         register_path = os.path.join(registry_root, code + ".json")
         register = load_register(register_path)
         register, flags = assign(code, clubs, register)

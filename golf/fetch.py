@@ -28,6 +28,11 @@ def queries(code):
         "holes": '[out:json][timeout:300];%sway[golf=hole](area.c);out tags geom;' % area,
         # Greens and tees, for clubs whose holes aren't mapped.
         "greens": '[out:json][timeout:300];%s(way[golf=green](area.c);way[golf=tee](area.c););out tags center;' % area,
+        "features": '[out:json][timeout:300];%s('
+            'node[golf=pin](area.c);'
+            'way[golf~"^(green|tee|fairway|bunker|water_hazard|lateral_water_hazard)$"](area.c);'
+            'relation[golf~"^(green|tee|fairway|bunker|water_hazard|lateral_water_hazard)$"](area.c);'
+            ');out geom;' % area,
     }
 
 
