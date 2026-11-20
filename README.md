@@ -1,4 +1,15 @@
+
+## Full-feature branch
+
+For my purpose I added these extra features to the output:
+
+"green",  "tee",  "fairway",  "bunker", "water_hazard", "lateral_water_hazard", "pin"
+
+Modified **build.py** and **golf/clean.py** and **golf/fetch.py** for country: **Japan**.
+
+
 # Golf courses from OpenStreetMap
+
 
 **Where golf courses are**: clubs, courses and holes (each hole's number and line, from the back tee to the pin) and
 greens, from [OpenStreetMap](https://www.openstreetmap.org), cleaned every week and published as one JSON file per
